@@ -1,3 +1,4 @@
+@import "NoiseGenerator.ck"
 
 1.0/60.0 => float dtGraphics;
 float currentGraphicsFrameTimeSeconds;
@@ -40,14 +41,14 @@ fun void printMousePosAndVelocity() {
  // pretend the window is this many inches wide in the simulation
 10.0 => float windowWidthInches;
 
-0.00001 => float inchesPerNoiseSample; // adjust density of noise
+// initialize noise generator and parameters (frequency, amplitude, lacunarity, gain)
+NoiseGen gen(3.0, inchesPerHeightSample*0.5, 2.0, 0.5);
+
 (windowWidthInches / inchesPerHeightSample) $ int => int heightmapSamples;
 float heightmap[heightmapSamples];
 Math.randomf() => float sampValue;
 for (int i; i < heightmapSamples; i++) {
-    if (i % ((inchesPerNoiseSample / inchesPerHeightSample) $ int) == 0)
-        Math.randomf() * inchesPerHeightSample => sampValue; // set inchesPerHeightSample as the maximum height to avoid crazy acceleration
-    sampValue => heightmap[i];
+    gen.noise(@(i*inchesPerHeightSample, 0)) => heightmap[i];
 }
 
 fun float sampleHeightmapNormalized(float heightmapToSample[], float samplingCoordZeroToOne) {
