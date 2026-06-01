@@ -66,7 +66,8 @@ board.sca(3.0);
 // -----------------------------------------------
 
 // Simulates Agarwal et al resolution of 5.6 micrometers
-0.000056 => float IN_PER_HEIGHT_SAMPLE;  // Note: increased 10x due to strange artifacting
+//0.0000056 => float IN_PER_HEIGHT_SAMPLE;
+0.00002 => float IN_PER_HEIGHT_SAMPLE;
 10.0 => float WINDOW_WIDTH_IN;
 
 // For texture alignment
@@ -100,7 +101,7 @@ hmap.workgroup((HMAP_TEX_WIDTH + WG_SIZE - 1) / WG_SIZE,
 GG.outputPass() --> hmap;
 
 // Noise parameters
-10.0 => float freq;
+20.0 => float freq;
 0.5  => float amp;
 2.0  => float lac;
 0.5  => float gain;
@@ -142,11 +143,18 @@ fun void updateHeightmap() {
 1 => int HPRIME;
 2 => int HDOUBLEPRIME;
 
+// Linearly-interpolated sampling
 fun float sampleHeightmap(int hmapIdx, float u) {
-    (heightmapSamples $ float * u) $ int => int sampleIdx;
-    Math.clampi(sampleIdx, 0, heightmapSamples - 1) => sampleIdx;
-    hmapIdx * heightmapSamples +=> sampleIdx;
-    return heightmap[sampleIdx];
+    heightmapSamples $ float * u => float samplePos;
+    Math.floor(samplePos) $ int => int sampleIdx;
+    samplePos - sampleIdx $ float => float fract;
+    Math.clampi(sampleIdx, 0, heightmapSamples - 1) => int idxLeft;
+    Math.clampi(sampleIdx + 1, 0, heightmapSamples - 1) => int idxRight;
+    hmapIdx * heightmapSamples +=> idxLeft;
+    hmapIdx * heightmapSamples +=> idxRight;
+    heightmap[idxLeft] => float sampleLeft;
+    heightmap[idxRight] => float sampleRight;
+    return sampleLeft + u*(sampleRight - sampleLeft);
 }
 
 // FOR TESTING: playback heightmap directly as audio
