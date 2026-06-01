@@ -38,6 +38,7 @@ fn noise(p : vec2f) -> f32
     return mix(mix(a, b, u.x), mix(c, d, u.x), u.y);
 }
 
+// Fractal brownian motion
 fn fbm(p : vec2f, freq : f32, amp: f32, lac : f32, gain : f32) -> f32
 {
     // Make values mutable
