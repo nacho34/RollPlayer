@@ -279,13 +279,15 @@ class Marble extends GGen
 
 // Controls game logic; all elements should be grucked to this
 class Labyrinth extends GGen {
-    Wall @ walls[4];
+    Wall @ walls[6];
     Marble ball(@(0, 0, 0), walls) --> this;
 
     new Wall(@(-10, 0, 0), Math.PI/2, 21.0) @=> walls[0];
     new Wall(@( 10, 0, 0), Math.PI/2, 21.0) @=> walls[1];
     new Wall(@(0, 0,  10), 0, 19.0) @=> walls[2];
     new Wall(@(0, 0, -10), 0, 19.0) @=> walls[3];
+    new Wall(@(-6, 0, 3), Math.PI/3, 15) @=> walls[4];
+    new Wall(@(6, 0, -3), Math.PI/3, 15) @=> walls[5];
 
     for(int i; i < walls.size(); i++) { walls[i] --> this; }
 
