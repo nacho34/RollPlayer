@@ -469,10 +469,10 @@ fun float secondPartialOfS(float normalForce, float heightmapSecondDerivative) {
 
 0.001 => float scraperMass;
 Impulse scrapePlayer => dac;
-50 => int forceHistorySize;
+40 => int forceHistorySize;
 float forceHistory[forceHistorySize];
 0 => int historyIdx;
-10 => int IRComputationSegments;
+4 => int IRComputationSegments;
 forceHistorySize / IRComputationSegments => int forceHistorySegmentSize;
 forceHistorySegmentSize / 4 => int overlap;
 
