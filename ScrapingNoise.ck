@@ -49,11 +49,13 @@ fun void printMousePosAndVelocity() {
 5 => int IRRows;
 6 => int IRCols;
 SndBuf IRs[IRRows][IRCols];
+Envelope irEnvs[IRRows][IRCols];
 "IRs/wood_block/" => string baseFolder;
 for (int row; row < IRRows; row++) {
     for (int col; col < IRCols; col++) {
         IRs[row][col].read(baseFolder + "Row" + (row + 1) + "/0" + (col + 1) + ".wav");
-        IRs[row][col] => dac;
+        IRs[row][col] => irEnvs[row][col] => dac;
+        irEnvs[row][col].time(0.02);
     }
 }
 
@@ -175,6 +177,9 @@ class Wall extends GGen {
         Math.random2(0, IRCols-1) => int c;
         IRs[r][c].gain(gain);
         IRs[r][c].pos(0);
+        irEnvs[r][c].keyOn();
+        0.2::second => now;
+        irEnvs[r][c].keyOff();
     }
 
     // Called on impact with ball, recomputes mode amplitudes and resets decay
@@ -189,7 +194,7 @@ class Wall extends GGen {
         now => lastImpact;
         now => t0;
 
-        playHit(0.3);
+        spork ~playHit(strength * 0.3);
 
         Math.clampf(strength*ampScale, 0.01, 0.04) => strength;
 
