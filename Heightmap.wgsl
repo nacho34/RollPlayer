@@ -38,7 +38,7 @@ fn noised(p : f32) -> vec3f
 }
 
 // Fractal brownian motion with derivatives
-fn fbm(p : f32, freq : f32, amp: f32, lac : f32, gain : f32) -> vec3f
+fn fbm(p : f32, nf : i32, freq : f32, amp: f32, lac : f32, gain : f32) -> vec3f
 {
     var f = freq;
     var a = amp;
@@ -46,7 +46,7 @@ fn fbm(p : f32, freq : f32, amp: f32, lac : f32, gain : f32) -> vec3f
     var val = 0.0;
     var d   = 0.0;
     var dd  = 0.0;
-    for (var i = 0; i < 8; i++)
+    for (var i = 0; i < nf; i++)
     {
         let n = noised(p*f);
         val += a*n.x;
@@ -79,6 +79,16 @@ fn main(@builtin(global_invocation_id) GlobalInvocationID : vec3<u32>) {
         return;
     }
 
+    let n_freqs = 8;
+
+    // Normalize so the max noise value is equal to amp
+    var inv_max_val = 1.0 / f32(n_freqs);
+    if (gain < 1.0)
+    {
+        inv_max_val = (1.0 - gain) / (1.0 - pow(gain, f32(n_freqs)));
+    }
+    let amp_n = amp * inv_max_val;
+
     // Pack 4 samples into each texel
     var out   = vec4f(0.0);
     var outd  = vec4f(0.0);
@@ -88,18 +98,17 @@ fn main(@builtin(global_invocation_id) GlobalInvocationID : vec3<u32>) {
     let s0 = (idx.y * dims.x + idx.x) * 4;
     let offset = 23.0;
 
-    let n0 = fbm(f32(s0)*sample_size+offset, freq, amp, lac, gain);
+    let n0 = fbm(f32(s0)*sample_size+offset, n_freqs, freq, amp_n, lac, gain);
     out.x = n0.x; outd.x = n0.y; outdd.x = n0.z;
    
-    let n1 = fbm(f32(s0+1)*sample_size+offset, freq, amp, lac, gain);
+    let n1 = fbm(f32(s0+1)*sample_size+offset, n_freqs, freq, amp_n, lac, gain);
     out.y = n1.x; outd.y = n1.y; outdd.y = n1.z;
 
-    let n2 = fbm(f32(s0+2)*sample_size+offset, freq, amp, lac, gain);
+    let n2 = fbm(f32(s0+2)*sample_size+offset, n_freqs, freq, amp_n, lac, gain);
     out.z = n2.x; outd.z = n2.y; outdd.z = n2.z;
         
-    let n3 = fbm(f32(s0+3)*sample_size+offset, freq, amp, lac, gain);
+    let n3 = fbm(f32(s0+3)*sample_size+offset, n_freqs, freq, amp_n, lac, gain);
     out.w = n3.x; outd.w = n3.y; outdd.w = n3.z;
-
 
     textureStore(heightmap, vec2u(idx.x, idx.y), out);
     textureStore(heightmap, vec2u(idx.x, idx.y + map_rows), outd);
