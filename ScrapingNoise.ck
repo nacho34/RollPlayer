@@ -1,5 +1,7 @@
 // @import "NoiseGenerator.ck"  // Replaced by compute shader
 
+GWindow.title("Labyrinth");
+
 1.0/60.0 => float dtGraphics;
 float currentGraphicsFrameTimeSeconds;
 
@@ -42,6 +44,18 @@ fun void printMousePosAndVelocity() {
 // -----------------------------------------------
 // GAME SETUP
 // -----------------------------------------------
+
+// read in IRs for a grid
+5 => int IRRows;
+6 => int IRCols;
+SndBuf IRs[IRRows][IRCols];
+"IRs/wood_block/" => string baseFolder;
+for (int row; row < IRRows; row++) {
+    for (int col; col < IRCols; col++) {
+        IRs[row][col].read(baseFolder + "Row" + (row + 1) + "/0" + (col + 1) + ".wav");
+        IRs[row][col] => dac;
+    }
+}
 
 // Euler-Bernoulli Beam constants
 [4.73004, 7.85320, 10.9956, 14.1372, 17.2788, 20.4204, 23.5619, 26.7035] @=> float BL[];
@@ -153,7 +167,15 @@ class Wall extends GGen {
                                 => modes[i].gain;
             }
         }
-    } spork ~ synthesize();
+    } //spork ~ synthesize();
+
+    fun void playHit(float gain)
+    {
+        Math.random2(0, IRRows-1) => int r;
+        Math.random2(0, IRCols-1) => int c;
+        IRs[r][c].gain(gain);
+        IRs[r][c].pos(0);
+    }
 
     // Called on impact with ball, recomputes mode amplitudes and resets decay
     fun void impact(float strength, float pos) 
@@ -166,6 +188,8 @@ class Wall extends GGen {
         }
         now => lastImpact;
         now => t0;
+
+        playHit(0.3);
 
         Math.clampf(strength*ampScale, 0.01, 0.04) => strength;
 
@@ -439,18 +463,6 @@ fun void playHeightMap(float heightmapToPlay[]) {
 // -----------------------------------------------
 // SOUND SYNTHESIS
 // -----------------------------------------------
-
-// read in IRs for a grid
-5 => int IRRows;
-6 => int IRCols;
-SndBuf IRs[IRRows][IRCols];
-"IRs/wood_block/" => string baseFolder;
-for (int row; row < IRRows; row++) {
-    for (int col; col < IRCols; col++) {
-        IRs[row][col].read(baseFolder + "Row" + (row + 1) + "/0" + (col + 1) + ".wav");
-        IRs[row][col] => dac;
-    }
-}
 
 // constants copied from Agarwal et al paper
 //float zeta = 0.95;
