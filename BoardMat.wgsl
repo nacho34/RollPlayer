@@ -1,3 +1,9 @@
+/* BoardMat.wgsl
+ * ----------------------------------------------------------------
+ * Material shader based on fractal brownian motion.
+ * Updates based on the parameters provided through the uniforms.
+ */
+
 #include FRAME_UNIFORMS
 #include DRAW_UNIFORMS
 #include STANDARD_VERTEX_INPUT
@@ -39,14 +45,14 @@ fn noise(p : vec2f) -> f32
 }
 
 // Fractal brownian motion
-fn fbm(p : vec2f, freq : f32, amp: f32, lac : f32, gain : f32) -> f32
+fn fbm(p : vec2f, nf : i32, freq : f32, amp: f32, lac : f32, gain : f32) -> f32
 {
     // Make values mutable
     var f = freq;
     var a = amp;
 
     var val = 0.0;
-    for (var i = 0; i < 8; i++)
+    for (var i = 0; i < nf; i++)
     {
         let n = noise(p*f);
         val += a*n;
@@ -67,11 +73,17 @@ fn fbm(p : vec2f, freq : f32, amp: f32, lac : f32, gain : f32) -> f32
 @fragment 
 fn fs_main(in : VertexOutput) -> @location(0) vec4f
 {   
-    // Adjust amp so value is capped at 1.0
-    let invMaxVal = clamp(1.0-gain, 0.125, 1.0);
-    let ampN = amp * invMaxVal;
+    let n_freqs = 8;
 
+    // Normalize so the max noise value is equal to amp
+    var inv_max_val = 1.0 / f32(n_freqs);
+    if (gain < 1.0)
+    {
+        inv_max_val = (1.0 - gain) / (1.0 - pow(gain, f32(n_freqs)));
+    }
+
+    let amp_n = amp * inv_max_val;
     let pos = in.v_uv + vec2f(23.0);
-    let val = fbm(pos, freq, ampN, lac, gain);
+    let val = fbm(pos, n_freqs, freq, amp_n, lac, gain);
     return vec4f(vec3f(1.0-val), 1.0);
 }
