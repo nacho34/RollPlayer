@@ -167,7 +167,7 @@ class Wall extends GGen {
         now => lastImpact;
         now => t0;
 
-        Math.clampf(strength*ampScale, 0.05, 0.1) => strength;
+        Math.clampf(strength*ampScale, 0.01, 0.04) => strength;
 
         for (0=>int i; i<amplitudes.size(); i++)
         {
@@ -301,19 +301,18 @@ class Labyrinth extends GGen {
     0.7 => float rotStr;
     @(0, 0, 0) => vec3 rotTarget;
 
-    // fun float getMarbleDistNorm() 
-    // { 
-    //     return ball.pos().x / 20.0 + 0.5;
-    //     //return Math.sqrt(ball.pos().dot(ball.pos())) * 0.0707;
-    // }
-
-    fun vec2 getMarbleVel()
-    {
-        return @(ball.vel.x / 20.0, ball.vel.z / 20.0);
-        //return Math.sqrt(ball.vel.dot(ball.vel));
+    fun float getMarbleHmapPos() 
+    { 
+        return ball.hmapPos;
     }
 
-    fun vec2 getMarblePosNormalized() {
+    fun float getMarbleVel()
+    {
+        if (ball.hmapFwd) return ball.spd * ball.hmapSca;
+        return -ball.spd * ball.hmapSca;
+    }
+
+    fun vec2 getMarblePosNorm() {
         return @(ball.pos().x / 20.0 + 0.5, ball.pos().z / 20.0 + 0.5);
     }
 
@@ -479,7 +478,7 @@ forceHistorySegmentSize / 4 => int overlap;
 float interpolatedIR[forceHistorySize];
 fun void computeInterpolatedIR(int counter)
 {
-    game.getMarblePosNormalized() => vec2 marblePos;
+    game.getMarblePosNorm() => vec2 marblePos;
 
      // Compute interpolated IR location
     (marblePos.y * (IRRows - 1)) $ int => int IRRow;
@@ -536,11 +535,11 @@ fun void computeInterpolatedIR(int counter)
 //     computeInterpolatedIR(i);
 // }
 
-fun void setNextScraperAudioSample(vec2 velocity, vec2 normalizedPosition, float normalForce)
+fun void setNextScraperAudioSample(float velocity, float hmapPos, float normalForce)
 {
     // compute force at current sample
-    secondPartialOfS(normalForce, sampleHeightmap(HDOUBLEPRIME, normalizedPosition.x)) => float SSecondPartial;
-    scraperMass * velocity.x * velocity.x * SSecondPartial => float thisSampleForce;
+    secondPartialOfS(normalForce, sampleHeightmap(HDOUBLEPRIME, hmapPos)) => float SSecondPartial;
+    scraperMass * velocity * velocity * SSecondPartial => float thisSampleForce;
 
     // store newest force
     thisSampleForce => forceHistory[historyIdx];
@@ -563,12 +562,11 @@ fun void makeScrubbingSounds() {
     while (true) {
         samp => now;
         
-        (now / second - currentGraphicsFrameTimeSeconds) / dtGraphics => float interpolator;
-        game.getMarbleVel() => vec2 vel;
-        game.getMarblePosNormalized() => vec2 basePos;
-        basePos.x + vel.x * interpolator => float xPos;
-        basePos.y + vel.y * interpolator => float yPos;
-        setNextScraperAudioSample(vel, @(xPos, yPos), 0.5);
+        (now / second - currentGraphicsFrameTimeSeconds) => float interpolator;
+        game.getMarbleVel() => float vel;
+        game.getMarbleHmapPos() => float basePos;
+        basePos + vel * interpolator => float interpPos;
+        setNextScraperAudioSample(vel, interpPos, 0.5);
 
         // NOTE: must adjust scraper mass to switch back to mouse
         // interpolate mouse position between graphics frames
