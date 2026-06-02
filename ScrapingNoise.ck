@@ -285,16 +285,20 @@ class Labyrinth extends GGen {
     0.7 => float rotStr;
     @(0, 0, 0) => vec3 rotTarget;
 
-    fun float getMarbleDistNorm() 
-    { 
-        return ball.pos().x / 20.0 + 0.5;
-        //return Math.sqrt(ball.pos().dot(ball.pos())) * 0.0707;
+    // fun float getMarbleDistNorm() 
+    // { 
+    //     return ball.pos().x / 20.0 + 0.5;
+    //     //return Math.sqrt(ball.pos().dot(ball.pos())) * 0.0707;
+    // }
+
+    fun vec2 getMarbleVel()
+    {
+        return @(ball.vel.x / 20.0, ball.vel.z / 20.0);
+        //return Math.sqrt(ball.vel.dot(ball.vel));
     }
 
-    fun float getMarbleSpeed()
-    {
-        return ball.vel.x / 20.0;
-        //return Math.sqrt(ball.vel.dot(ball.vel));
+    fun vec2 getMarblePosNormalized() {
+        return @(ball.pos().x / 20.0 + 0.5, ball.pos().z / 20.0 + 0.5);
     }
 
     fun void update(float dt)
@@ -421,6 +425,18 @@ fun void playHeightMap(float heightmapToPlay[]) {
 // SOUND SYNTHESIS
 // -----------------------------------------------
 
+// read in IRs for a grid
+5 => int IRRows;
+6 => int IRCols;
+SndBuf IRs[IRRows][IRCols];
+"IRs/wood_block/" => string baseFolder;
+for (int row; row < IRRows; row++) {
+    for (int col; col < IRCols; col++) {
+        IRs[row][col].read(baseFolder + "Row" + (row + 1) + "/0" + (col + 1) + ".wav");
+        IRs[row][col] => dac;
+    }
+}
+
 // constants copied from Agarwal et al paper
 //float zeta = 0.95;
 0.01 => float alphaMin;
@@ -437,11 +453,57 @@ fun float secondPartialOfS(float normalForce, float heightmapSecondDerivative) {
 
 10.0 => float scraperMass;
 Impulse scrapePlayer => dac;
-fun void setNextScraperAudioSample(float velocityX, float normalizedPositionX, float normalForce) {
-    secondPartialOfS(normalForce, sampleHeightmap(HDOUBLEPRIME, normalizedPositionX)) => float SSecondPartial;
-    scrapePlayer.next(scraperMass * velocityX * velocityX * SSecondPartial);
-    
-    //scrapePlayer.next(scraperMass * velocityX * velocityX * sampleHeightmap(HDOUBLEPRIME, normalizedPositionX));
+15 => int forceHistorySize;
+float forceHistory[forceHistorySize];
+0 => int historyIdx;
+
+fun void setNextScraperAudioSample(vec2 velocity,
+                                   vec2 normalizedPosition,
+                                   float normalForce)
+{
+    // compute force at current sample
+    secondPartialOfS(normalForce, sampleHeightmap(HDOUBLEPRIME, normalizedPosition.x)) => float SSecondPartial;
+
+    scraperMass * velocity.x * velocity.x * SSecondPartial => float thisSampleForce;
+
+    // store newest force
+    thisSampleForce => forceHistory[historyIdx];
+
+    // Compute interpolated IR location
+    (normalizedPosition.y * (IRRows - 1)) $ int => int IRRow;
+    (normalizedPosition.y * (IRRows - 1) - IRRow $ float) => float IRRowInterp;
+    (IRRow >= IRRows - 2) ? IRRows - 2 : IRRow => IRRow;
+
+    (normalizedPosition.x * (IRCols - 1)) $ int => int IRCol;
+    (normalizedPosition.x * (IRCols - 1) - IRCol $ float) => float IRColInterp;
+    (IRCol >= IRCols - 2) ? IRCols - 2 : IRCol => IRCol;
+
+    // bilinear interpolation weights
+    (1 - IRRowInterp) * (1 - IRColInterp) => float w00;
+    IRRowInterp * (1 - IRColInterp) => float w10;
+    (1 - IRRowInterp) * IRColInterp => float w01;
+    IRRowInterp * IRColInterp => float w11;
+
+    // Convolution
+    0.0 => float finalSampleValue;
+    for (int i; i < forceHistorySize; i++)
+    {
+        (historyIdx - i + forceHistorySize)
+            % forceHistorySize => int idx;
+
+        forceHistory[idx] => float force;
+
+        finalSampleValue + force * (
+            w00 * IRs[IRRow][IRCol].valueAt(i)
+            + w10 * IRs[IRRow + 1][IRCol].valueAt(i)
+            + w01 * IRs[IRRow][IRCol + 1].valueAt(i)
+            + w11 * IRs[IRRow + 1][IRCol + 1].valueAt(i)
+        ) => finalSampleValue;
+    }
+
+    scrapePlayer.next(finalSampleValue); // arbitrary gain for now
+
+    (historyIdx + 1) % forceHistorySize => historyIdx;
 }
 
 0 => int counter;
@@ -450,10 +512,11 @@ fun void makeScrubbingSounds() {
         samp => now;
         
         (now / second - currentGraphicsFrameTimeSeconds) / dtGraphics => float interpolator;
-        game.getMarbleSpeed() => float spd;
-        game.getMarbleDistNorm() + spd * interpolator => float pos;
-        setNextScraperAudioSample(spd, pos, 0.5);
-
+        game.getMarbleVel() => vec2 vel;
+        game.getMarblePosNormalized() => vec2 basePos;
+        basePos.x + vel.x * interpolator => float xPos;
+        basePos.y + vel.y * interpolator => float yPos;
+        setNextScraperAudioSample(vel, @(xPos, yPos), 0.5);
 
         // NOTE: must adjust scraper mass to switch back to mouse
         // interpolate mouse position between graphics frames
