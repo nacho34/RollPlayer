@@ -85,5 +85,9 @@ fn fs_main(in : VertexOutput) -> @location(0) vec4f
     let amp_n = amp * inv_max_val;
     let pos = in.v_uv + vec2f(23.0);
     let val = fbm(pos, n_freqs, freq, amp_n, lac, gain);
-    return vec4f(vec3f(1.0-val), 1.0);
+
+    let wood_light = vec3f(0.87, 0.72, 0.53);
+    let wood_dark = vec3f(0.54, 0.41, 0.08);
+
+    return vec4f(mix(wood_light, wood_dark, val), 1.0);
 }

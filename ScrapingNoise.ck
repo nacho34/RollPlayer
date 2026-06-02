@@ -87,7 +87,7 @@ Material mat(matShader);
 
 // Colliders with impact sound synthesis
 class Wall extends GGen {
-    1.0 => float ampScale;       // Volume adjust
+    3.0 => float ampScale;       // Volume adjust
 
     // Damping constants
     10.0 => float alpha;          // Mass
@@ -109,7 +109,7 @@ class Wall extends GGen {
     // w, h, w segments, h segments
     CubeGeometry geo(1.0, 1.0, 1.0, 1, 1, 1);
     PhongMaterial mat;
-    mat.color(@(1.0, 1.0, 1.0));
+    mat.color(@(0.54, 0.41, 0.08));
 
     GMesh wallModel(geo, mat) --> this;
     wallModel.rotX(Math.PI/2.0);;
@@ -186,14 +186,20 @@ class Marble extends GGen
 {
     @(0,  0,  0) => vec3 vel;
     @(0, -1,  0) => vec3 gDir;
-    0.42 => float g;
+    50.0 => float g;
     0.90 => float fr;
     0.65 => float e;  // coeff of restiution
+
+    0.0  => float spd;
+    0.05 => float hmapSca;
+    0.0  => float hmapPos;
+    true => int hmapFwd;
 
     Wall @ walls[];
 
     GSphere ball --> this;
     ball.sca(2.0);  // So radius is 1.0 if this.scaX() is 1.0
+    ball.color(@(0.54, 0.41, 0.08));
 
     this.sca(0.5);
 
@@ -249,7 +255,15 @@ class Marble extends GGen
         dt*g*gDir.x -=> this.vel.x;
         dt*g*gDir.z -=> this.vel.z;
         1.0-(fr*dt) *=> this.vel;  // Fake friction
-        this.translate(this.vel);
+        this.translate(this.vel*dt);
+
+        Math.sqrt(this.vel.dot(this.vel)) => spd;
+        spd*dt*hmapSca => float dp;
+        if (!hmapFwd) -1 *=> dp;
+        dp +=> hmapPos;
+
+        if (hmapFwd) { if (hmapPos+dp >= 1.0) false => hmapFwd; }
+        else { if (hmapPos+dp <= 0.0) true => hmapFwd; }
 
         for (0=>int iter; iter<10; iter++)
         {
@@ -265,13 +279,15 @@ class Marble extends GGen
 
 // Controls game logic; all elements should be grucked to this
 class Labyrinth extends GGen {
-    Wall @ walls[4];
+    Wall @ walls[6];
     Marble ball(@(0, 0, 0), walls) --> this;
 
     new Wall(@(-10, 0, 0), Math.PI/2, 21.0) @=> walls[0];
     new Wall(@( 10, 0, 0), Math.PI/2, 21.0) @=> walls[1];
     new Wall(@(0, 0,  10), 0, 19.0) @=> walls[2];
     new Wall(@(0, 0, -10), 0, 19.0) @=> walls[3];
+    new Wall(@(-6, 0, 3), Math.PI/3, 15) @=> walls[4];
+    new Wall(@(6, 0, -3), Math.PI/3, 15) @=> walls[5];
 
     for(int i; i < walls.size(); i++) { walls[i] --> this; }
 
@@ -451,7 +467,7 @@ fun float secondPartialOfS(float normalForce, float heightmapSecondDerivative) {
     return (1.0 / alpha) * Math.tanh(alpha * heightmapSecondDerivative);
 }
 
-10.0 => float scraperMass;
+0.001 => float scraperMass;
 Impulse scrapePlayer => dac;
 50 => int forceHistorySize;
 float forceHistory[forceHistorySize];
@@ -562,17 +578,18 @@ fun void makeScrubbingSounds() {
         
         // setNextScraperAudioSample(interpolatedMouseVelocityX, interpolatedMouseX, interpolatedMouseY);
      
-        // Logging
-        // counter++;
-        // if (counter % 1000 == 0) {
-        //    //<<< "current mouse x: " + currentMouseX >>>;
-        //    //<<< "previous mouse x: " + prevMouseX >>>;
-        //    <<< "interpolated mouse x: " + interpolatedMouseX >>>;
-        //    <<<"mouse vel" + interpolatedMouseVelocityX >>>;
+        //Logging
+        counter++;
+        if (counter % 1000 == 0) {
+           //<<< "current mouse x: " + currentMouseX >>>;
+           //<<< "previous mouse x: " + prevMouseX >>>;
+           //    <<< "interpolated mouse x: " + interpolatedMouseX >>>;
+           //    <<<"mouse vel" + interpolatedMouseVelocityX >>>;
 
-        //     <<<"ball vel" + spd>>>;
-        //     <<<"ball x" + pos>>>;
-        // }
+           //     <<<"ball vel" + spd>>>;
+           //     <<<"ball x" + pos>>>;
+           //<<<interpolator>>>;
+        }
     }
 } spork ~makeScrubbingSounds();
 
