@@ -453,29 +453,25 @@ fun float secondPartialOfS(float normalForce, float heightmapSecondDerivative) {
 
 10.0 => float scraperMass;
 Impulse scrapePlayer => dac;
-15 => int forceHistorySize;
+50 => int forceHistorySize;
 float forceHistory[forceHistorySize];
 0 => int historyIdx;
+10 => int IRComputationSegments;
+forceHistorySize / IRComputationSegments => int forceHistorySegmentSize;
+forceHistorySegmentSize / 4 => int overlap;
 
-fun void setNextScraperAudioSample(vec2 velocity,
-                                   vec2 normalizedPosition,
-                                   float normalForce)
+float interpolatedIR[forceHistorySize];
+fun void computeInterpolatedIR(int counter)
 {
-    // compute force at current sample
-    secondPartialOfS(normalForce, sampleHeightmap(HDOUBLEPRIME, normalizedPosition.x)) => float SSecondPartial;
+    game.getMarblePosNormalized() => vec2 marblePos;
 
-    scraperMass * velocity.x * velocity.x * SSecondPartial => float thisSampleForce;
-
-    // store newest force
-    thisSampleForce => forceHistory[historyIdx];
-
-    // Compute interpolated IR location
-    (normalizedPosition.y * (IRRows - 1)) $ int => int IRRow;
-    (normalizedPosition.y * (IRRows - 1) - IRRow $ float) => float IRRowInterp;
+     // Compute interpolated IR location
+    (marblePos.y * (IRRows - 1)) $ int => int IRRow;
+    (marblePos.y * (IRRows - 1) - IRRow $ float) => float IRRowInterp;
     (IRRow >= IRRows - 2) ? IRRows - 2 : IRRow => IRRow;
 
-    (normalizedPosition.x * (IRCols - 1)) $ int => int IRCol;
-    (normalizedPosition.x * (IRCols - 1) - IRCol $ float) => float IRColInterp;
+    (marblePos.x * (IRCols - 1)) $ int => int IRCol;
+    (marblePos.x * (IRCols - 1) - IRCol $ float) => float IRColInterp;
     (IRCol >= IRCols - 2) ? IRCols - 2 : IRCol => IRCol;
 
     // bilinear interpolation weights
@@ -484,24 +480,64 @@ fun void setNextScraperAudioSample(vec2 velocity,
     (1 - IRRowInterp) * IRColInterp => float w01;
     IRRowInterp * IRColInterp => float w11;
 
+    // fade cleanly between computed segments
+    counter * forceHistorySegmentSize => int segStart;
+    (counter + 1) * forceHistorySegmentSize => int segEnd;
+    segStart - overlap => int start;
+    segEnd + overlap => int end;
+
+    if (start < 0) 0 => start;
+    if (end > forceHistorySize) forceHistorySize => end;
+
+    for (start => int i; i < end; i++)
+    {
+        w00 * IRs[IRRow][IRCol].valueAt(i)
+        + w10 * IRs[IRRow + 1][IRCol].valueAt(i)
+        + w01 * IRs[IRRow][IRCol + 1].valueAt(i)
+        + w11 * IRs[IRRow + 1][IRCol + 1].valueAt(i)
+        => float newVal;
+
+        // crossfade amount
+        1.0 => float blend;
+
+        if (i < segStart)
+        {
+            (i - start) $ float / overlap => blend;
+        }
+        else if (i >= segEnd)
+        {
+            (end - i) $ float / overlap => blend;
+        }
+
+        // blend with existing IR
+        (1.0 - blend) * interpolatedIR[i]
+        + blend * newVal
+        => interpolatedIR[i];
+    }
+}
+
+// for (int i; i < IRComputationSegments; i++) { // compute initial IRs to have something
+//     computeInterpolatedIR(i);
+// }
+
+fun void setNextScraperAudioSample(vec2 velocity, vec2 normalizedPosition, float normalForce)
+{
+    // compute force at current sample
+    secondPartialOfS(normalForce, sampleHeightmap(HDOUBLEPRIME, normalizedPosition.x)) => float SSecondPartial;
+    scraperMass * velocity.x * velocity.x * SSecondPartial => float thisSampleForce;
+
+    // store newest force
+    thisSampleForce => forceHistory[historyIdx];
+   
     // Convolution
     0.0 => float finalSampleValue;
     for (int i; i < forceHistorySize; i++)
     {
-        (historyIdx - i + forceHistorySize)
-            % forceHistorySize => int idx;
-
-        forceHistory[idx] => float force;
-
-        finalSampleValue + force * (
-            w00 * IRs[IRRow][IRCol].valueAt(i)
-            + w10 * IRs[IRRow + 1][IRCol].valueAt(i)
-            + w01 * IRs[IRRow][IRCol + 1].valueAt(i)
-            + w11 * IRs[IRRow + 1][IRCol + 1].valueAt(i)
-        ) => finalSampleValue;
+        (historyIdx - i + forceHistorySize) % forceHistorySize => int forceIdx;
+        finalSampleValue + forceHistory[forceIdx] * interpolatedIR[i] => finalSampleValue;
     }
 
-    scrapePlayer.next(finalSampleValue); // arbitrary gain for now
+    scrapePlayer.next(finalSampleValue); // output the sample
 
     (historyIdx + 1) % forceHistorySize => historyIdx;
 }
@@ -544,11 +580,19 @@ fun void makeScrubbingSounds() {
 // GAMELOOP AND UI
 // -----------------------------------------------
 
+0 => int irComputationCounter;
+
 while (true) {
     GG.nextFrame() => now;
     now / second => currentGraphicsFrameTimeSeconds;
     updateMousePos();
     updateMouseVelocity();
+
+    if (irComputationCounter == IRComputationSegments) {
+        0 => irComputationCounter;
+    }
+    computeInterpolatedIR(irComputationCounter);
+    irComputationCounter++;
 
     if (UI.begin("Noise Parameters")) {
         false => int update;
