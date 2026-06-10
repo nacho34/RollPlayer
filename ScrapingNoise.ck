@@ -326,6 +326,12 @@ class Labyrinth extends GGen {
     gameBoard.rotX(Math.pi/2);
     gameBoard.posY(-0.5);
 
+    // used for COM offset force calculation
+    float marbleTheta;
+    float marbleThetaPrime;
+    float prevMarbleTheta;
+    float prevMarbleThetaPrime;
+
     Math.PI/8 => float rotMax;
     0.7 => float rotStr;
     @(0, 0, 0) => vec3 rotTarget;
@@ -355,6 +361,11 @@ class Labyrinth extends GGen {
 
         this.rot(lerp(this.rot(), rotTarget, dt*4.0));
         ball.setGDir(this.up()*-1);
+
+        marbleTheta => prevMarbleTheta;
+        marbleThetaPrime => prevMarbleThetaPrime;
+        marbleTheta + getMarbleVel() / (ball.scaX() * 2 * Math.PI) * dt => marbleTheta;
+        getMarbleVel() / (ball.scaX() * 2 * Math.PI) => marbleThetaPrime;
     }
 }
 
@@ -431,11 +442,9 @@ float heightmap[heightmapSamples * 3];
 
 // Send heightmap from GPU to CPU (some latency)
 fun void updateHeightmap() {
-    while(true) {
-        hmap_tex.read() => now;
-        hmap_tex.data() @=> heightmap;
-    }
-} spork ~ updateHeightmap();
+    hmap_tex.read() => now;
+    hmap_tex.data() @=> heightmap;
+} //spork ~ updateHeightmap();
 
 // Enum for heightmap index
 0 => int H;
@@ -552,11 +561,24 @@ fun void computeInterpolatedIR(int counter)
 //     computeInterpolatedIR(i);
 // }
 
-fun void setNextScraperAudioSample(float velocity, float hmapPos, float normalForce)
+0.05 => float ballCOMOffset; // COM offset from ball center
+0.2 => float k; // ball spring stiffness for COM offset force calculation
+0.1 => float lambda; // damping factor for COM offset force calculation
+
+fun void setNextScraperAudioSample(float velocity, float hmapPos, float normalForce, float marbleTheta, float marbleThetaPrime)
 {
-    // compute force at current sample
+    // compute vertical force at current sample
     secondPartialOfS(normalForce, sampleHeightmap(HDOUBLEPRIME, hmapPos)) => float SSecondPartial;
-    scraperMass * velocity * velocity * SSecondPartial => float thisSampleForce;
+    scraperMass * velocity * velocity * SSecondPartial => float verticalForce;
+
+    // compute COM offset force at current sample per eqns 15, 16 in Agarwal
+    1 => float ballRadius;
+    ballRadius - ballCOMOffset * Math.cos(marbleTheta) => float p;
+    ballCOMOffset * Math.sin(marbleTheta) * marbleThetaPrime => float pPrime;
+    k * Math.pow(p, 1.5) + lambda * Math.pow(p, 1.5) * pPrime => float COMForce;
+
+    // total force for impulse generation, can do this by linearity of convolution to apply IR after summing forces
+    COMForce + verticalForce => float thisSampleForce;
 
     // store newest force
     thisSampleForce => forceHistory[historyIdx];
@@ -583,7 +605,11 @@ fun void makeScrubbingSounds() {
         game.getMarbleVel() => float vel;
         game.getMarbleHmapPos() => float basePos;
         basePos + vel * interpolator => float interpPos;
-        setNextScraperAudioSample(vel, interpPos, 0.5);
+
+        game.prevMarbleTheta + interpolator * (game.marbleTheta - game.prevMarbleTheta) => float marbleTheta;
+        game.prevMarbleThetaPrime + interpolator * (game.marbleThetaPrime - game.prevMarbleThetaPrime) => float marbleThetaPrime;
+
+        setNextScraperAudioSample(vel, interpPos, 0.5, marbleTheta, marbleThetaPrime);
 
         // NOTE: must adjust scraper mass to switch back to mouse
         // interpolate mouse position between graphics frames
@@ -632,6 +658,7 @@ while (true) {
         if (UI.slider("Amplitude",  a, 0.0, 1.0  )) { a.val() => amp;  true => update; }
         if (UI.slider("Lacunarity", l, 1.0, 3.0   )) { l.val() => lac;  true => update; }
         if (UI.slider("Gain",       g, 0.0, 1.0   )) { g.val() => gain; true => update; }
+        if (UI.button("Update Heightmap")) { spork ~updateHeightmap(); }
         
         if (update) { setUniforms(); }
     }
