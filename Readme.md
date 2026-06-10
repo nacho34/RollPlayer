@@ -8,6 +8,8 @@ https://arxiv.org/pdf/2112.08984
 For this project, we reimplemnented the scraping and rolling sound synthesis model described in the above paper for purposes of both reproduction and in order to adapt it to realtime uses. We worked in the ChuGL audiovisual programming environment:
 https://chuck.stanford.edu/chugl/
 
+Credit to Inigo Quilez (https://iquilezles.org/articles/fbm/) and munrocket (https://gist.github.com/munrocket/236ed5ba7e409b8bdf1ff6eca5dcdc39) for some parts of the fractal noise generation.
+
 Our steps consisted in
 - Implementing a fractal noise generation algorithm (see Heightmap.wgsl) which replaces the physically measured heightmaps in the original paper. We gave the noise tunable parameters so that artists could experiment with different qualities of the noise, and also allow these parameters to be adjusted in realtime during the demo, which could allow for rapid iteration or even responsive manipulation during gameplay.
 - Creating a simple physics simulation of a ball rolling around on a table with interactive control via rotating the table (see ScrapingNoise.ck).
